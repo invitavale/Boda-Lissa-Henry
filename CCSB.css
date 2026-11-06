@@ -3087,3 +3087,33 @@ body { font-family: 'EB Garamond', Georgia, serif; font-size: 1.15rem; }
 }
 .regalo-medallon img { display: block; width: 100%; height: 100%; object-fit: cover; }
 @media (max-width: 480px) { .regalo-medallon { width: 156px; height: 156px; } }
+
+/* Portada nueva (pareja en la loma): encuadre centrado en los novios */
+.hero-bg { object-position: 60% 50% !important; }
+@media (min-width: 769px) { .hero-bg { object-position: 50% 58% !important; } }
+/* Nombres arriba, sobre el bosque, para no tapar a los novios */
+.hero-names {
+    top: max(11vh, 84px) !important;
+    bottom: auto !important;
+}
+.hero-names::before {
+    top: -40vh !important;
+    bottom: auto !important;
+    height: calc(40vh + 260px) !important;
+    background: linear-gradient(0deg, rgba(36, 20, 13, 0) 0%, rgba(36, 20, 13, 0.38) 45%, rgba(36, 20, 13, 0.45) 100%) !important;
+}
+@media (min-width: 769px) {
+    .hero-names { top: max(8vh, 60px) !important; }
+    .hero-bg { object-position: 50% 62% !important; }
+}
+/* Pie: monograma LH (solo las letras) en lugar de los anillos, mismo tamaño */
+.footer-content::before {
+    width: 76px !important;
+    height: 74px !important;
+    background-image: url("iconos/insp/monograma-lh.webp") !important;
+    filter: drop-shadow(0 0 10px rgba(240, 214, 150, 0.35)) !important;
+}
+/* Portada: nombres y textos un poco más grandes */
+.hero-names .hn-kicker { font-size: clamp(1rem, 3.2vw, 1.25rem) !important; }
+.hero-names .hn-names { font-size: clamp(3.3rem, 11vw, 5.4rem) !important; }
+.hero-names .hn-phrase { font-size: clamp(1.15rem, 4.3vw, 1.5rem) !important; max-width: 34rem; }
