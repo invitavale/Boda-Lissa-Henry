@@ -3127,3 +3127,6 @@ body { font-family: 'EB Garamond', Georgia, serif; font-size: 1.15rem; }
     text-transform: uppercase;
     color: #D6BD91 !important;
 }
+/* Copas: llenan el medallón y quedan recortadas al círculo (sin mezcla de color) */
+.t-ico.t-ico-copas img { mix-blend-mode: normal !important; }
+.t-ico.t-ico-lleno { overflow: hidden; -webkit-mask-image: radial-gradient(circle, #000 99%, transparent 100%); }
