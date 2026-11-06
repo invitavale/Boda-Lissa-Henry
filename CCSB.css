@@ -3117,3 +3117,13 @@ body { font-family: 'EB Garamond', Georgia, serif; font-size: 1.15rem; }
 .hero-names .hn-kicker { font-size: clamp(1rem, 3.2vw, 1.25rem) !important; }
 .hero-names .hn-names { font-size: clamp(3.3rem, 11vw, 5.4rem) !important; }
 .hero-names .hn-phrase { font-size: clamp(1.15rem, 4.3vw, 1.5rem) !important; max-width: 34rem; }
+/* Portada: cita bíblica bajo la frase */
+.hero-names .hn-phrase.hn-cita {
+    margin-top: 0.35rem !important;
+    font-family: 'Bodoni Moda', serif !important;
+    font-style: normal !important;
+    font-size: clamp(0.72rem, 2.4vw, 0.85rem) !important;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #D6BD91 !important;
+}
