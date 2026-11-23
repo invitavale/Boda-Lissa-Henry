@@ -8,7 +8,7 @@
       openDressCodeModal()  (o showDressCode()). */
 (function () {
     const REGALO = {
-        mesaRegalosUrl: 'https://listaderegalos.casacuesta.com/Event/LissaAmelia-HenryAntonio',
+        mesaRegalosUrl: 'https://www.myregistry.com/giftlist/HenryandLissasHappyeverafter',
         titulares: [
             {
                 nombre: 'Henry Monsanto',
@@ -60,7 +60,7 @@
                   '<p class="rg-sub">Tu presencia es nuestro mejor regalo. Si deseas tener un detalle con nosotros:</p>' +
                   '<button type="button" class="rg-option" data-rg="mesa">' +
                     '<span class="rg-option-icon">' + ICON_GIFT + '</span>' +
-                    '<span class="rg-option-text"><strong>Lista de regalos</strong><span>Ver nuestra lista en Casa Cuesta</span></span>' +
+                    '<span class="rg-option-text"><strong>Lista de regalos</strong><span>Ver nuestra lista en MyRegistry</span></span>' +
                     '<span class="rg-option-arrow">›</span></button>' +
                   '<button type="button" class="rg-option" data-rg="bank">' +
                     '<span class="rg-option-icon">' + ICON_BANK + '</span>' +

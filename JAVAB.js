@@ -1,195 +1,523 @@
-/* ===== Modal de Regalos (módulo reutilizable) =====
-   Para usarlo en otra invitación:
-   1) Copiar regalo-modal.css, regalo-modal.js y regalo-fondo.jpg a la carpeta.
-   2) Enlazar regalo-modal.css en el head (etiqueta link).
-   3) Cargar regalo-modal.js al final del body, despues de java2.js.
-   4) El botón de regalos llama a openGiftModal()  (o showGifts()).
-   5) Código de vestimenta: copiar codigo-vestimenta.jpg; el botón llama a
-      openDressCodeModal()  (o showDressCode()). */
-(function () {
-    const REGALO = {
-        mesaRegalosUrl: 'https://www.myregistry.com/giftlist/HenryandLissasHappyeverafter',
-        titulares: [
-            {
-                nombre: 'Henry Monsanto',
-                cuentas: [
-                    ['Banco BHD · Ahorro', '32513800013']
-                ],
-                cedula: '402-0052388-0',
-                correo: 'hmonsanto007@gmail.com'
-            },
-            {
-                nombre: 'Lissa A. Encarnación L.',
-                cuentas: [
-                    ['Banco Popular · Ahorro', '845741792'],
-                    ['Banreservas · Ahorro', '9606098233']
-                ],
-                cedula: '402-2492568-1',
-                correo: 'lissaamelia05@gmail.com'
+// Variables globales
+let isPlaying = false;
+let currentSlide = 0;
+let totalSlides = 0;
+
+// Animación de entrada del título "Primero nos casamos" en la portada
+function revealHeroTitle() {
+    document.body.classList.remove('hero-revealed');
+    void document.body.offsetWidth; // reinicia la animación si se llama de nuevo
+    document.body.classList.add('hero-revealed');
+}
+
+// Intro: sobre en video. El toque para abrirlo es el "detonante": en ese
+// mismo gesto arranca el video y la música de fondo (así lo exigen iPhone,
+// Android y todos los navegadores). Al terminar hay un destello dorado y la
+// invitación entra con un zoom suave de la portada.
+function setupIntroEnvelope() {
+    const overlay = document.getElementById('introOverlay');
+    const video = document.getElementById('introVideo');
+    const skip = document.getElementById('introSkip');
+    if (!overlay || !video) { enterInvitation(); return; }
+
+    let started = false;
+    let finished = false;
+    document.documentElement.style.overflow = 'hidden';
+
+    function finishIntro() {
+        if (finished) return;
+        finished = true;
+        overlay.classList.add('is-ending');
+        setTimeout(function() {
+            overlay.classList.add('is-hidden');
+            document.documentElement.style.overflow = '';
+            try { video.pause(); } catch (e) {}
+            enterInvitation();
+            setTimeout(function() { overlay.remove(); }, 1200);
+        }, 700);
+    }
+
+    // Respaldo: si el teléfono/navegador no reproduce el video, se muestra
+    // la misma animación del sobre como imagen animada (funciona en todos).
+    let usingAnim = false;
+    function useAnimFallback() {
+        if (usingAnim || finished) return;
+        usingAnim = true;
+        const anim = document.getElementById('introAnim');
+        if (!anim) { finishIntro(); return; }
+        try { video.pause(); } catch (e) {}
+        video.style.display = 'none';
+        anim.hidden = false;
+        anim.src = anim.getAttribute('data-src');
+        setTimeout(finishIntro, 7400);
+    }
+
+    function start() {
+        if (started) return;
+        started = true;
+        overlay.classList.add('is-playing');
+        startMusic(); // dentro del gesto del usuario
+        video.muted = true; // la canción reemplaza el sonido del video
+        let p;
+        try { p = video.play(); } catch (e) { useAnimFallback(); return; }
+        if (p && p.catch) p.catch(useAnimFallback);
+        // Si en 1.2 s el video no avanzó, usar la animación
+        setTimeout(function() {
+            if (!finished && !usingAnim && video.currentTime < 0.1) useAnimFallback();
+        }, 1200);
+    }
+
+    overlay.addEventListener('click', start);
+
+    // Termina un poco antes del final para encadenar con el destello
+    video.addEventListener('timeupdate', function() {
+        if (video.duration && video.currentTime >= video.duration - 0.6) finishIntro();
+    });
+    video.addEventListener('ended', finishIntro);
+    video.addEventListener('error', function() { if (started) useAnimFallback(); });
+
+    if (skip) {
+        skip.addEventListener('click', function(e) {
+            e.stopPropagation();
+            startMusic(); // por si saltan antes de que arranque
+            finishIntro();
+        });
+    }
+}
+
+function enterInvitation() {
+    document.body.classList.add('invite-enter');
+    revealHeroTitle();
+    const mp = document.getElementById('musicPlayer');
+    if (mp) mp.style.display = 'block';
+}
+
+// Música de fondo (archivo propio)
+function startMusic() {
+    const music = document.getElementById('bgMusic');
+    if (!music) return;
+    music.volume = 0.85;
+    const p = music.play();
+    if (p && p.then) {
+        p.then(function() { isPlaying = true; updateMusicIcon(); })
+         .catch(function() { isPlaying = false; updateMusicIcon(); });
+    }
+}
+
+function setupMusic() {
+    const music = document.getElementById('bgMusic');
+    const toggle = document.getElementById('musicToggle');
+    if (!music) return;
+    music.addEventListener('play', function() { isPlaying = true; updateMusicIcon(); });
+    music.addEventListener('pause', function() { isPlaying = false; updateMusicIcon(); });
+    if (toggle) toggle.addEventListener('click', toggleMusic);
+    // Pausar al salir de la pestaña y retomar al volver
+    let wasPlaying = false;
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) { wasPlaying = !music.paused; music.pause(); }
+        else if (wasPlaying) { music.play().catch(function() {}); }
+    });
+}
+
+// Efecto elegante al hacer scroll: el contenido de cada sección aparece
+// subiendo suavemente y enfocándose.
+function setupScrollReveal() {
+    if (!('IntersectionObserver' in window)) return;
+    const items = document.querySelectorAll('.content section > *:not(.section-divider), .content .countdown-section > *, .content .bienvenida-section > *, .content .footer-verso, .content .footer-content');
+    const io = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible');
+                io.unobserve(entry.target);
             }
-        ]
-    };
-
-    function holder(h) {
-        return '<div class="rg-holder"><div class="rg-holder-name">' + h.nombre + '</div>' +
-            h.cuentas.map(function (c) { return row(c[0], c[1]); }).join('') +
-            row('Cédula', h.cedula) +
-            row('Correo', h.correo) +
-            '</div>';
-    }
-
-    const ICON_COPY = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-    const ICON_CHECK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
-    const ICON_BANK = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10l9-6 9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8"/><path d="M3 21h18"/></svg>';
-    const ICON_GIFT = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>';
-
-    function row(label, value) {
-        return '<div class="rg-row"><div class="rg-row-text"><span class="rg-label">' + label +
-            '</span><span class="rg-value">' + value + '</span></div>' +
-            '<button type="button" class="rg-copy" data-copy="' + value + '" aria-label="Copiar ' + label + '">' + ICON_COPY + '</button></div>';
-    }
-
-    function build() {
-        if (document.getElementById('rgOverlay')) return;
-        const html =
-            '<div id="rgOverlay" class="rg-overlay" role="dialog" aria-modal="true" aria-label="Regalos">' +
-              '<div class="rg-sheet">' +
-                '<button type="button" class="rg-close" data-rg="close" aria-label="Cerrar">&times;</button>' +
-                '<div class="rg-choose" id="rgChoose">' +
-                  '<div class="rg-title">Regalos</div>' +
-                  '<p class="rg-sub">Tu presencia es nuestro mejor regalo. Si deseas tener un detalle con nosotros:</p>' +
-                  '<button type="button" class="rg-option" data-rg="mesa">' +
-                    '<span class="rg-option-icon">' + ICON_GIFT + '</span>' +
-                    '<span class="rg-option-text"><strong>Lista de regalos</strong><span>Ver nuestra lista en MyRegistry</span></span>' +
-                    '<span class="rg-option-arrow">›</span></button>' +
-                  '<button type="button" class="rg-option" data-rg="bank">' +
-                    '<span class="rg-option-icon">' + ICON_BANK + '</span>' +
-                    '<span class="rg-option-text"><strong>Datos bancarios</strong><span>Transferencia o depósito</span></span>' +
-                    '<span class="rg-option-arrow">›</span></button>' +
-                '</div>' +
-                '<div class="rg-bank rg-hidden" id="rgBank">' +
-                  '<button type="button" class="rg-back" data-rg="back">‹ Volver</button>' +
-                  '<div class="rg-bank-card">' +
-                    '<div class="rg-title">Datos Bancarios</div>' +
-                    REGALO.titulares.map(holder).join('') +
-                    '<p class="rg-note">¡Gracias por tu cariño!</p>' +
-                  '</div>' +
-                '</div>' +
-              '</div>' +
-            '</div>' +
-            '<div id="rgToast" class="rg-toast">Copiado ✓</div>';
-        document.body.insertAdjacentHTML('beforeend', html);
-
-        const overlay = document.getElementById('rgOverlay');
-        overlay.addEventListener('click', function (e) {
-            if (e.target === overlay) return closeGiftModal();
-            const btn = e.target.closest('[data-rg],[data-copy]');
-            if (!btn) return;
-            if (btn.dataset.copy !== undefined) return copyValue(btn);
-            const a = btn.dataset.rg;
-            if (a === 'close') closeGiftModal();
-            else if (a === 'bank') showStep('bank');
-            else if (a === 'back') showStep('choose');
-            else if (a === 'mesa') window.open(REGALO.mesaRegalosUrl, '_blank', 'noopener');
         });
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') closeGiftModal();
-        });
-    }
+    }, { threshold: 0.15, rootMargin: '0px 0px -8% 0px' });
+    items.forEach(function(el) {
+        const idx = Array.prototype.indexOf.call(el.parentNode.children, el);
+        el.style.transitionDelay = Math.min(idx, 4) * 0.12 + 's';
+        el.classList.add('reveal');
+        io.observe(el);
+    });
+}
 
-    function showStep(step) {
-        document.getElementById('rgChoose').classList.toggle('rg-hidden', step !== 'choose');
-        document.getElementById('rgBank').classList.toggle('rg-hidden', step !== 'bank');
+// Inicializar cuando el DOM esté listo
+// Calendario del mes de la boda con el día marcado (semana de lunes a domingo).
+// Para otra boda, basta con cambiar WEDDING_DATE.
+const WEDDING_DATE = { anio: 2027, mes: 0, dia: 23 }; // mes: 0 = enero
+function renderCalendar() {
+    const grid = document.getElementById('calGrid');
+    const titulo = document.getElementById('calMes');
+    if (!grid) return;
+    const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const { anio, mes, dia } = WEDDING_DATE;
+    if (titulo) titulo.textContent = MESES[mes] + ' ' + anio;
+    let html = ['L','M','M','J','V','S','D'].map(d => '<span class="cal-h">' + d + '</span>').join('');
+    const offset = (new Date(anio, mes, 1).getDay() + 6) % 7;
+    const total = new Date(anio, mes + 1, 0).getDate();
+    for (let i = 0; i < offset; i++) html += '<span></span>';
+    for (let d = 1; d <= total; d++) {
+        html += d === dia
+            ? '<span class="cal-d on" aria-current="date"><i>' + d + '</i></span>'
+            : '<span class="cal-d">' + d + '</span>';
     }
+    grid.innerHTML = html;
+}
 
-    function copyValue(btn) {
-        const text = btn.dataset.copy;
-        const done = function () {
-            btn.classList.add('copied');
-            btn.innerHTML = ICON_CHECK;
-            const t = document.getElementById('rgToast');
-            t.classList.add('show');
-            setTimeout(function () {
-                btn.classList.remove('copied');
-                btn.innerHTML = ICON_COPY;
-                t.classList.remove('show');
-            }, 1600);
-        };
-        const fallback = function () {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.setAttribute('readonly', '');
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.select();
-            ta.setSelectionRange(0, text.length);
-            try { document.execCommand('copy'); } catch (_) {}
-            document.body.removeChild(ta);
-            done();
-        };
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(text).then(done, fallback);
+document.addEventListener('DOMContentLoaded', function() {
+    renderCalendar();
+    initializeCountdown();
+    initializeCarousel();
+    initializeGuestGreeting();
+    setupIntroEnvelope();
+
+    setupMusic();
+    setupScrollReveal();
+});
+
+
+
+function toggleMusic() {
+    const music = document.getElementById('bgMusic');
+    if (!music) return;
+    if (music.paused) { music.play().catch(function() {}); }
+    else { music.pause(); }
+}
+
+function updateMusicIcon() {
+    const volumeIcon = document.getElementById('volumeIcon');
+
+    if (volumeIcon) {
+        if (isPlaying) {
+            volumeIcon.innerHTML = `
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="#5B3324" stroke="#fff" stroke-width="1"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.08" stroke="#5B3324" stroke-width="2"></path>
+                <circle cx="6.5" cy="12" r="1" fill="#C5A64B"/>
+            `;
         } else {
-            fallback();
+            volumeIcon.innerHTML = `
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="#5B3324" stroke="#fff" stroke-width="1"></polygon>
+                <line x1="19" y1="9" x2="17" y2="11" stroke="#D8B9B4" stroke-width="2"></line>
+                <line x1="17" y1="9" x2="19" y2="11" stroke="#D8B9B4" stroke-width="2"></line>
+                <circle cx="6.5" cy="12" r="1" fill="#D8B9B4"/>
+            `;
         }
     }
+}
 
-    function openGiftModal() {
-        build();
-        showStep('choose');
-        document.getElementById('rgOverlay').classList.add('open');
-        document.body.style.overflow = 'hidden';
+// Countdown
+function initializeCountdown() {
+    const targetDate = new Date('2027-01-23T17:00:00-04:00').getTime();
+    
+    function updateCountdown() {
+        const now = new Date().getTime();
+        const difference = targetDate - now;
+        
+        if (difference > 0) {
+            const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+            
+            document.getElementById('days').textContent = days.toString().padStart(2, '0');
+            document.getElementById('hours').textContent = hours.toString().padStart(2, '0');
+            document.getElementById('minutes').textContent = minutes.toString().padStart(2, '0');
+            document.getElementById('seconds').textContent = seconds.toString().padStart(2, '0');
+        } else {
+            document.getElementById('days').textContent = '00';
+            document.getElementById('hours').textContent = '00';
+            document.getElementById('minutes').textContent = '00';
+            document.getElementById('seconds').textContent = '00';
+        }
     }
+    
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+}
 
-    function closeGiftModal() {
-        const o = document.getElementById('rgOverlay');
-        if (!o) return;
-        o.classList.remove('open');
-        document.body.style.overflow = '';
+// Carrusel
+function initializeCarousel() {
+    const track = document.getElementById('carouselTrack');
+    const nextBtn = document.getElementById('nextBtn');
+    const prevBtn = document.getElementById('prevBtn');
+
+    if (!track) return;
+
+    // calcular total dinámicamente
+    const items = track.querySelectorAll('.carousel-item');
+    totalSlides = items.length;
+    const totalSlidesElement = document.getElementById('totalSlides');
+    if (totalSlidesElement) totalSlidesElement.textContent = totalSlides;
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            currentSlide = (currentSlide + 1) % totalSlides;
+            updateCarousel();
+        });
     }
-
-    window.openGiftModal = openGiftModal;
-    window.closeGiftModal = closeGiftModal;
-    window.showGifts = openGiftModal; // compatibilidad con onclick="showGifts()"
-    /* ----- Código de vestimenta (imagen flotante) ----- */
-    const DRESS_IMG = 'codigo-vestimenta.jpg?v=5';
-    const DRESS_IMG_MOVIL = 'codigo-vestimenta-movil.jpg?v=6';
-
-    function buildDress() {
-        if (document.getElementById('rgDressOverlay')) return;
-        document.body.insertAdjacentHTML('beforeend',
-            '<div id="rgDressOverlay" class="rg-overlay" role="dialog" aria-modal="true" aria-label="Código de vestimenta">' +
-              '<div class="rg-sheet rg-dress">' +
-                '<button type="button" class="rg-close" aria-label="Cerrar">&times;</button>' +
-                '<picture><source media="(max-width: 640px)" srcset="' + DRESS_IMG_MOVIL + '">' +
-                '<img src="' + DRESS_IMG + '" alt="Paleta de colores, vestimenta formal. Tonos sugeridos: verde salvia, verde oliva, terracota, naranja quemado, camel, chocolate, burgundy, borgoña y negro." loading="lazy"></picture>' +
-              '</div>' +
-            '</div>');
-        const o = document.getElementById('rgDressOverlay');
-        o.addEventListener('click', function (e) {
-            if (e.target === o || e.target.closest('.rg-close')) closeDressCodeModal();
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            currentSlide = (currentSlide - 1 + totalSlides) % totalSlides;
+            updateCarousel();
         });
     }
 
-    function openDressCodeModal() {
-        buildDress();
-        document.getElementById('rgDressOverlay').classList.add('open');
-        document.body.style.overflow = 'hidden';
+    // Ajuste inicial para asegurar cálculo correcto tras el render
+    updateCarousel();
+    requestAnimationFrame(updateCarousel);
+    setTimeout(updateCarousel, 200);
+
+    // Auto-play del carrusel
+    setInterval(() => {
+        nextSlide();
+    }, 2500);
+}
+
+function updateCarousel() {
+    const track = document.getElementById('carouselTrack');
+    if (track) {
+        const items = track.querySelectorAll('.carousel-item');
+        if (!items.length) return;
+        const container = track.parentElement;
+
+        // Temporarily reset transform to measure actual positions
+        const previousTransform = track.style.transform;
+        track.style.transform = 'none';
+
+        const firstRect = items[0].getBoundingClientRect();
+        const secondRect = items[1] ? items[1].getBoundingClientRect() : null;
+        const stepWidth = Math.max(1, secondRect ? Math.round(secondRect.left - firstRect.left) : Math.round(firstRect.width));
+
+        const containerWidth = Math.round(container.getBoundingClientRect().width);
+        const visibleCount = Math.max(1, Math.floor((containerWidth + 1) / stepWidth));
+        const maxIndex = Math.max(0, totalSlides - visibleCount);
+
+        // Detecta si hay que dar la vuelta (de la última foto a la 1, o viceversa)
+        let wrapped = false;
+        if (currentSlide > maxIndex) { currentSlide = 0; wrapped = true; }
+        if (currentSlide < 0) { currentSlide = maxIndex; wrapped = true; }
+
+        const trackRect = track.getBoundingClientRect();
+        const baseLeft = Math.round(firstRect.left - trackRect.left);
+        const translateXpx = -Math.round(baseLeft + (currentSlide * stepWidth));
+
+        if (wrapped) {
+            // Al dar la vuelta, salta directo a la foto 1 sin animar el regreso
+            // (evita el efecto de "devolverse" deslizando hacia atrás por todas las fotos)
+            const prevTransition = track.style.transition;
+            track.style.transition = 'none';
+            track.style.transform = `translateX(${translateXpx}px)`;
+            void track.offsetWidth; // fuerza reflow para aplicar el salto sin animación
+            track.style.transition = prevTransition || '';
+        } else {
+            // Apply transform
+            track.style.transform = `translateX(${translateXpx}px)`;
+        }
+        // console.log('Carousel moved to slide:', { currentSlide, visibleCount, maxIndex, translateXpx, stepWidth, baseLeft });
+    }
+    updateSlideCounter();
+    markCenterCarouselItem();
+}
+
+function nextSlide() {
+    currentSlide++;
+    updateCarousel();
+}
+
+function previousSlide() {
+    currentSlide--;
+    updateCarousel();
+}
+
+function updateSlideCounter() {
+    const currentSlideElement = document.getElementById('currentSlide');
+    const totalSlidesElement = document.getElementById('totalSlides');
+    if (currentSlideElement) currentSlideElement.textContent = (currentSlide + 1);
+    if (totalSlidesElement) totalSlidesElement.textContent = totalSlides;
+}
+
+// Mark center carousel item on desktop
+function markCenterCarouselItem() {
+    const track = document.getElementById('carouselTrack');
+    if (!track) return;
+    const items = Array.from(track.querySelectorAll('.carousel-item'));
+    if (!items.length) return;
+    items.forEach(it => it.classList.remove('is-center'));
+
+    const firstItem = items[0];
+    const container = track.parentElement;
+    const itemWidth = firstItem.getBoundingClientRect().width;
+    const containerWidth = container.getBoundingClientRect().width;
+    const visibleCount = Math.max(1, Math.floor(containerWidth / itemWidth));
+
+    const centerIndex = (currentSlide + Math.floor(visibleCount / 2)) % items.length;
+    items[centerIndex].classList.add('is-center');
+}
+
+// Hook into carousel updates
+const _origUpdateCarousel = typeof updateCarousel === 'function' ? updateCarousel : null;
+if (_origUpdateCarousel) {
+    window.updateCarousel = function() {
+        _origUpdateCarousel();
+        markCenterCarouselItem();
+    };
+}
+
+window.addEventListener('resize', markCenterCarouselItem);
+
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(markCenterCarouselItem, 200);
+});
+
+// Funciones de los botones
+// Nota: esta es una plantilla de ejemplo, así que los botones de
+// "¿Cómo llegar?", "Subir Fotos" y "Confirmar Asistencia" no llevan a
+// ningún enlace real todavía. Cuando se use para una boda real, basta con
+// reemplazar cada URL de ejemplo por el enlace definitivo (Google Maps,
+// álbum de fotos compartido, formulario de RSVP, etc.).
+function openLocation(location) {
+    const urls = {
+        ceremony: 'https://maps.app.goo.gl/XxN4G3ywyxeR2oJy7',
+        reception: 'https://maps.app.goo.gl/326dkUQWrnnjdfjr7'
+    };
+    const url = urls[location];
+    if (url) {
+        window.open(url, '_blank', 'noopener');
+    }
+}
+
+// Álbum compartido de Google Fotos (antes: https://photos.app.goo.gl/p9PGQHWrvLG1Bpj28)
+const PHOTO_ALBUM_URL = 'https://photos.app.goo.gl/fey51JWfjgCk88r79';
+
+function sharePhotos() {
+    // Abre el álbum compartido de Google Fotos en una pestaña nueva
+    // (en el celular abre la app de Google Fotos si está instalada).
+    const win = window.open(PHOTO_ALBUM_URL, '_blank');
+    if (win) {
+        win.opener = null;
+    } else {
+        // Si el navegador bloqueó la pestaña nueva, abrir en la misma
+        window.location.href = PHOTO_ALBUM_URL;
+    }
+}
+
+// Código de vestimenta: imagen flotante (vive en regalo-modal.js)
+function showDressCode() {
+    if (window.openDressCodeModal) window.openDressCodeModal();
+}
+
+function showTips() {
+    const modal = document.getElementById('tipsModal');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+function closeTipsModal() {
+    const modal = document.getElementById('tipsModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Regalos: el modal (datos bancarios / mesa de regalos) vive en regalo-modal.js
+function showGifts() {
+    if (window.openGiftModal) window.openGiftModal();
+}
+
+// Confirmación de asistencia (Google Form)
+// (antes: https://docs.google.com/forms/d/e/1FAIpQLSdIYoM33yAkMmS4DZCRVmO9_IE0gZT4eEw8cV0r2PgWlYE0Ag/viewform?usp=header)
+function confirmAttendance() {
+    window.open('https://www.zola.com/wedding/henryandlissa', '_blank', 'noopener');
+}
+
+// Sistema de Toast
+function showToast(title, message) {
+    const toast = document.getElementById('toast');
+    const toastContent = document.getElementById('toastContent');
+    
+    toastContent.innerHTML = `
+        <h4 style="font-weight: 700; color: #fff; margin-bottom: 0.35rem; letter-spacing: 0.2px;">${title}</h4>
+        <p style="color: #ddd;">${message}</p>
+    `;
+    
+    toast.classList.add('show');
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 4000);
+}
+
+// Nota: el efecto de portada ahora se logra 100% con CSS (hero fijo detrás
+// del contenido, ver .hero-section y .content en CCSB.css), igual que en
+// boda100L. Ya no hace falta mover nada por JS en el scroll.
+
+// Saludo personalizado por invitado/familia, leído desde la URL.
+// Formatos soportados:
+//   ?invitados=Juan Arias,Yerianny Arias,Valery Arias
+//   ?familia=Arias
+function initializeGuestGreeting() {
+    const params = new URLSearchParams(window.location.search);
+    const invitadosParam = params.get('invitados');
+    const familiaParam = params.get('familia');
+
+    const section = document.getElementById('guestSection');
+    const badge = document.getElementById('guestBadge');
+    const subtitle = document.getElementById('guestSubtitle');
+    const greeting = document.getElementById('guestGreeting');
+    if (!section || !badge || !subtitle || !greeting) return;
+
+    let names = [];
+
+    if (invitadosParam) {
+        names = invitadosParam.split(',').map(n => decodeURIComponent(n.trim())).filter(Boolean);
+    } else if (familiaParam) {
+        names = [`Familia ${familiaParam.trim()}`];
     }
 
-    function closeDressCodeModal() {
-        const o = document.getElementById('rgDressOverlay');
-        if (!o) return;
-        o.classList.remove('open');
-        document.body.style.overflow = '';
+    if (names.length === 0) return;
+
+    // Badge con el total de invitados
+    badge.textContent = names.length;
+
+    // Subtítulo de acompañantes: solo tiene sentido cuando hay más de un
+    // nombre individual (no aplica al formato "Familia X")
+    const companions = invitadosParam ? names.length - 1 : 0;
+    if (companions > 0) {
+        subtitle.textContent = `(${companions} acompañante${companions > 1 ? 's' : ''})`;
+        subtitle.style.display = 'block';
+    } else {
+        subtitle.style.display = 'none';
     }
 
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') closeDressCodeModal();
+    // Limpiar contenido previo
+    greeting.innerHTML = '';
+
+    names.forEach((name, index) => {
+        const nameSpan = document.createElement('span');
+        const colorIndex = (index % 4) + 1;
+        nameSpan.className = `guest-name color-${colorIndex}`;
+        nameSpan.textContent = name;
+        greeting.appendChild(nameSpan);
     });
 
-    window.openDressCodeModal = openDressCodeModal;
-    window.closeDressCodeModal = closeDressCodeModal;
-    window.showDressCode = openDressCodeModal; // compatibilidad con onclick="showDressCode()"
+    section.style.display = 'block';
+}
+
+// Forzar limpieza de caches en clientes antiguos
+(function() {
+  function clearCaches() {
+    if ('caches' in window) {
+      caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
+    }
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(reg => reg.unregister());
+      }).catch(() => {});
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', clearCaches);
+  } else {
+    clearCaches();
+  }
 })();
